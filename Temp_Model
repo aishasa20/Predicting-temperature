@@ -1,0 +1,116 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import pandas as pd
+import math
+from keras.models import Sequential
+from keras.layers import Dense, Input
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.metrics import mean_squared_error
+
+""" # Import the temperature data """
+
+
+df = pd.read_csv('/data.csv', header=4)
+df.head()
+
+""" Convert the Year column into datetime """
+
+df['Year'] = pd.to_datetime(df['Year'], format='%Y-%m')
+df.head()
+
+""" Plotting temperature anomaly vs year.
+
+"""
+
+plt.plot(df['Year'], df['Anomaly'])
+plt.xticks(df['Year'][::5], rotation=90)
+plt.xlabel('Year')
+plt.ylabel('Temp Anomaly')
+plt.show()
+
+"""	Makes temperature anomaly into a 2D numpy array"""
+
+temp = df['Anomaly'].values
+temp = temp.astype('float32')
+temp = temp[:, np.newaxis]
+
+""" Scales the temperature  """
+
+scaler = MinMaxScaler()
+temp = scaler.fit_transform(temp)
+
+"""Converts the temperature array into sequences of 24 monthly temperatures that are shifted by one month in each row of the array
+def to_sequences(temp, seq_size):
+  x = []
+  y = []
+
+  for i in range(len(temp)- seq_size - 1):
+    window = temp[i:(i+seq_size), 0]
+    x.append(window)
+    y.append(temp[i+seq_size, 0])
+
+  return np.array(x), np.array(y)
+
+seq_size = 24
+X, Y = to_sequences(temp, seq_size)
+
+print('Shape of dataset:', X.shape)
+print(X)
+print("Shape of y", Y.shape)
+print(Y)
+
+""" Dense feedforward neural network with sequences of temperature as input and y as the output."""
+
+model = Sequential()
+model.add(Input(shape=seq_size))
+model.add(Dense(128, activation='relu'))
+model.add(Dense(64, activation='relu'))
+model.add(Dense(1))
+model.compile(loss='mean_squared_error', optimizer='adam')
+print(model.summary())
+
+model.fit(X,Y, verbose=1, epochs=20)
+
+""" Predict the next month’s temperature for all sequences in X"""
+
+YPredict = model.predict(X)
+YPredict = scaler.inverse_transform(YPredict)
+Y_inverse = scaler.inverse_transform([Y])
+
+
+Score = math.sqrt(mean_squared_error(Y_inverse[0], YPredict[:,0]))
+print('Score:', Score)
+
+""" Plots predicted temperatures vs actual temperatures"""
+
+# shift predictions so they align on x-axis with original dataset
+
+YPredictPlot = np.empty_like(temp)
+YPredictPlot[:, :] = np.nan
+YPredictPlot[seq_size:len(YPredict) + seq_size, :] = YPredict
+
+plt.plot(df['Year'], scaler.inverse_transform(temp))
+plt.plot(df['Year'], YPredictPlot)
+plt.xticks(df['Year'][::5], rotation=90)
+plt.show()
+
+"""12.	Predicts temperature for the next 24 months into the future """
+
+
+# reiterate through 24 months
+for i in range(24):
+    pred = model.predict(X_future.reshape(1, seq_size))
+    future_predictions.append(pred[0])
+    X_future = np.append(X_future[1:], pred[0])
+
+# Inverse scale the future predictions
+future_predictions_inv = scaler.inverse_transform(np.array(future_predictions))
+
+
+plt.plot(df['Year'], scaler.inverse_transform(temp), label = 'Actual Anomaly')
+plt.plot(df['Year'], YPredictPlot, label = 'Predicted Anomaly')
+future_years = df['Year'].iloc[-1] + pd.to_timedelta(np.arange(1, 25), unit='m')
+plt.plot(future_years, future_predictions_inv, label='Future Predictions', color='green')
+plt.xticks(df['Year'][::5], rotation=90)
+plt.legend()
+plt.show()
